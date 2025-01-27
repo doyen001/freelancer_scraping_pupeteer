@@ -3,9 +3,6 @@ const fs = require('fs');
 const path = require('path');
 const axios = require('axios'); // For downloading images
 const sharp = require('sharp');
-const express = require('express');
-
-const app = express();
 
 // Function to download images
 async function downloadImage(url, savePath) {
@@ -22,8 +19,9 @@ async function downloadImage(url, savePath) {
     .toFile(savePath);
 }
 
-async function getImage() {
-  const browser = await puppeteer.launch({ headless: true });
+// Main script
+(async () => {
+  const browser = await puppeteer.launch({ headless: false });
   const page = await browser.newPage();
 
   const baseURL = 'https://www.freelancer.com/freelancers/skills/3ds-max/1';
@@ -70,16 +68,4 @@ async function getImage() {
 
   await browser.close();
   console.log('All images downloaded successfully!');
-}
-
-
-app.get('/', async (req, res) => {
-  // await getImage();
-  res.json({
-    "result": "success"
-  });
-});
-
-app.listen(3000, () => {
-  console.log('Server started on port 3000');
-});
+})();
