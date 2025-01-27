@@ -24,47 +24,56 @@ async function downloadImage(url, savePath) {
   const browser = await puppeteer.launch({ headless: false });
   const page = await browser.newPage();
 
-  const baseURL = 'https://www.freelancer.com/freelancers/skills/3ds-max/1';
-  await page.goto(baseURL, { waitUntil: 'networkidle2' });
+  for (let i = 1; i < 150; i++) {
+    const baseURL = `https://www.freelancer.com/freelancers/skills/3ds-max/${i}`;
+    await page.goto(baseURL, { waitUntil: 'networkidle2' });
 
-  // Step 1: Extract profile URLs from the main page
-  const profileUrls = await page.$$eval('.find-freelancer-username[href]', links =>
-    links.map(link => link.href).filter(href => href.includes('/u/'))
-  );
-
-  console.log(`Found ${profileUrls.length} profiles.`);
-
-  // Step 2: Visit each profile and download portfolio images
-  for (const profileUrl of profileUrls) {
-    console.log(`Visiting profile: ${profileUrl}`);
-    await page.goto(profileUrl, { waitUntil: 'networkidle2' });
-
-    const userName = await page.$eval(
-      'fl-heading.Username-userId.Username-userId-heading.ng-star-inserted > h3',
-      (element) => element.textContent.trim()
-    );
-    const countryName = await page.$eval('div.UserSummaryInformation .SupplementaryInfo .NativeElement.ng-star-inserted',
-      (element) => element.textContent.split('(')[0].trim());
-
-    // Extract image URLs
-    const imageUrls = await page.$$eval('.PortfolioItemCard-file-container.ng-star-inserted img', imgs =>
-      imgs
-        .map(img => img.src)
+    // Step 1: Extract profile URLs from the main page
+    const profileUrls = await page.$$eval('.find-freelancer-username[href]', links =>
+      links.map(link => link.href).filter(href => href.includes('/u/'))
     );
 
-    console.log(`Found ${imageUrls.length} portfolio images.`);
-    // Step 3: Download each image
-    for (const [index, imageUrl] of imageUrls.entries()) {
-      const fileName = `${userName}-${countryName}-${index + 1}.jpg`;
-      const savePath = path.join(__dirname, 'downloads', fileName);
+    if (profileUrls.length === 0) {
+      console.log(`Found ${profileUrls.length} profiles.`);
+      await browser.close();
+      return;
+    } else {
+      console.log(`Found ${profileUrls.length} profiles.`);
+      // Step 2: Visit each profile and download portfolio images
+      for (const profileUrl of profileUrls) {
+        console.log(`Visiting profile: ${profileUrls[0]}`);
+        await page.goto(profileUrls[0], { waitUntil: 'networkidle2' });
 
-      // Ensure the download directory exists
-      fs.mkdirSync(path.dirname(savePath), { recursive: true });
+        const userName = await page.$eval(
+          'fl-heading.Username-userId.Username-userId-heading.ng-star-inserted > h3',
+          (element) => element.textContent.trim()
+        );
+        const countryName = await page.$eval('div.UserSummaryInformation .SupplementaryInfo .NativeElement.ng-star-inserted',
+          (element) => element.textContent.split('(')[0].trim());
 
-      console.log(`Downloading image: ${imageUrl}`);
-      await downloadImage(imageUrl, savePath);
+        // Extract image URLs
+        const imageUrls = await page.$$eval('.PortfolioItemCard-file-container.ng-star-inserted img', imgs =>
+          imgs
+            .map(img => img.src)
+        );
+
+        console.log(`Found ${imageUrls.length} portfolio images.`);
+        // Step 3: Download each image
+        for (const [index, imageUrl] of imageUrls.entries()) {
+          const fileName = `${userName}-${countryName}-${index + 1}.jpg`;
+          const savePath = path.join(__dirname, 'downloads', fileName);
+
+          // Ensure the download directory exists
+          fs.mkdirSync(path.dirname(savePath), { recursive: true });
+
+          console.log(`Downloading image: ${imageUrl}`);
+          await downloadImage(imageUrl, savePath);
+        }
+      }
     }
+
   }
+
 
   await browser.close();
   console.log('All images downloaded successfully!');
