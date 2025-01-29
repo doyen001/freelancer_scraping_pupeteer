@@ -41,33 +41,36 @@ async function downloadImage(url, savePath) {
       console.log(`Found ${profileUrls.length} profiles.`);
       // Step 2: Visit each profile and download portfolio images
       for (const profileUrl of profileUrls) {
-        console.log(`Visiting profile: ${profileUrls[0]}`);
-        await page.goto(profileUrls[0], { waitUntil: 'networkidle2' });
+        console.log(`Visiting profile: ${profileUrl}`);
+        // await page.goto("https://www.freelancer.com/u/Dixelar", { waitUntil: 'domcontentloaded' });
 
-        const userName = await page.$eval(
-          'fl-heading.Username-userId.Username-userId-heading.ng-star-inserted > h3',
-          (element) => element.textContent.trim()
-        );
-        const countryName = await page.$eval('div.UserSummaryInformation .SupplementaryInfo .NativeElement.ng-star-inserted',
-          (element) => element.textContent.split('(')[0].trim());
+        try {
+          await page.goto(profileUrl, { waitUntil: 'domcontentloaded' });
+          const namePart = profileUrl.split('/');
+          const userName = namePart[namePart.length - 1];
+          // Extract image URLs
+          const countryName = await page.$eval('div.UserSummaryInformation .SupplementaryInfo .NativeElement.ng-star-inserted',
+            (element) => element.textContent.split('(')[0].trim());
 
-        // Extract image URLs
-        const imageUrls = await page.$$eval('.PortfolioItemCard-file-container.ng-star-inserted img', imgs =>
-          imgs
-            .map(img => img.src)
-        );
+          const imageUrls = await page.$$eval('.PortfolioItemCard-file-container.ng-star-inserted img', imgs =>
+            imgs
+              .map(img => img.src).filter((item) => item.includes("jpg"))
+          );
+          console.log(`Found ${imageUrls.length} portfolio images.`);
+          // Step 3: Download each image
+          for (const [index, imageUrl] of imageUrls.entries()) {
+            const fileName = `${userName}-${countryName}-${index + 1}.jpg`;
+            const savePath = path.join(__dirname, 'downloads', fileName);
 
-        console.log(`Found ${imageUrls.length} portfolio images.`);
-        // Step 3: Download each image
-        for (const [index, imageUrl] of imageUrls.entries()) {
-          const fileName = `${userName}-${countryName}-${index + 1}.jpg`;
-          const savePath = path.join(__dirname, 'downloads', fileName);
+            // Ensure the download directory exists
+            fs.mkdirSync(path.dirname(savePath), { recursive: true });
 
-          // Ensure the download directory exists
-          fs.mkdirSync(path.dirname(savePath), { recursive: true });
-
-          console.log(`Downloading image: ${imageUrl}`);
-          await downloadImage(imageUrl, savePath);
+            console.log(`Downloading image: ${imageUrl}`);
+            await downloadImage(imageUrl, savePath);
+          }
+        } catch (error) {
+          console.log('error reason: ', error);
+          continue;
         }
       }
     }
