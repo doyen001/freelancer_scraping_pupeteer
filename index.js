@@ -4,6 +4,13 @@ const path = require('path');
 const axios = require('axios'); // For downloading images
 const sharp = require('sharp');
 
+const PROGRESS_FILE = 'progress.json';
+
+let downloadedImages = new Set();
+if (fs.existsSync(PROGRESS_FILE)) {
+  downloadedImages = new Set(JSON.parse(fs.readFileSync(PROGRESS_FILE, 'utf-8')));
+}
+
 // Function to download images
 async function downloadImage(url, savePath) {
   const writer = fs.createWriteStream(savePath);
@@ -60,13 +67,20 @@ async function downloadImage(url, savePath) {
           // Step 3: Download each image
           for (const [index, imageUrl] of imageUrls.entries()) {
             const fileName = `${userName}-${countryName}-${index + 1}.jpg`;
-            const savePath = path.join(__dirname, 'downloads', fileName);
+            const savePath = path.join(__dirname, `downloads/${countryName}`, fileName);
+
+            if (downloadedImages.has(imageUrl)) {
+              console.log(`Skipping: ${imageUrl} (already downloaded)`);
+              continue;
+            }
 
             // Ensure the download directory exists
             fs.mkdirSync(path.dirname(savePath), { recursive: true });
 
             console.log(`Downloading image: ${imageUrl}`);
             await downloadImage(imageUrl, savePath);
+            downloadedImages.add(imageUrl);
+            fs.writeFileSync(PROGRESS_FILE, JSON.stringify(Array.from(downloadedImages), null, 2));
           }
         } catch (error) {
           console.log('error reason: ', error);
