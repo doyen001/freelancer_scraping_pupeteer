@@ -46,7 +46,6 @@ async function downloadImage(url, savePath) {
     const profileUrls = await page.$$eval('.find-freelancer-username[href]', links =>
       links.map(link => link.href)
     );
-    console.log(profileUrls);
 
     if (profileUrls.length === 0) {
       console.log(`Found ${profileUrls.length} profiles.`);
