@@ -4,6 +4,13 @@ const path = require('path');
 const axios = require('axios'); // For downloading images
 const sharp = require('sharp');
 
+const PROGRESS_FILE = 'progress.json';
+
+let downloadedImages = new Set();
+if (fs.existsSync(PROGRESS_FILE)) {
+  downloadedImages = new Set(JSON.parse(fs.readFileSync(PROGRESS_FILE, 'utf-8')));
+}
+
 // Function to download images
 async function downloadImage(url, savePath) {
   const writer = fs.createWriteStream(savePath);
@@ -24,13 +31,20 @@ async function downloadImage(url, savePath) {
   const browser = await puppeteer.launch({ headless: false });
   const page = await browser.newPage();
 
-  for (let i = 1; i < 150; i++) {
-    const baseURL = `https://www.freelancer.com/freelancers/skills/3ds-max/${i}`;
-    await page.goto(baseURL, { waitUntil: 'networkidle2' });
-
+  for (let i = 1; i < 1000; i++) {
+    if (i === 1) {
+      const baseURL = `https://www.freelancer.com/freelancers/skills/3ds-max/1`;
+      await page.goto(baseURL, { waitUntil: 'domcontentloaded' });
+      await new Promise(resolve => setTimeout(resolve, 15000));
+      await page.click('#online_only');
+      await new Promise(resolve => setTimeout(resolve, 10000));
+    } else {
+      await page.waitForSelector('#display_div > div:nth-child(1) > div.ns_pagination.is-desktop-only > ul > li:nth-child(7) > a', { visible: true, timeout: 10000 });
+      await page.click('#display_div > div:nth-child(1) > div.ns_pagination.is-desktop-only > ul > li:nth-child(7) > a');
+    }
     // Step 1: Extract profile URLs from the main page
     const profileUrls = await page.$$eval('.find-freelancer-username[href]', links =>
-      links.map(link => link.href).filter(href => href.includes('/u/'))
+      links.map(link => link.href)
     );
 
     if (profileUrls.length === 0) {
@@ -39,20 +53,20 @@ async function downloadImage(url, savePath) {
       return;
     } else {
       console.log(`Found ${profileUrls.length} profiles.`);
+      const profilePage = await browser.newPage();
       // Step 2: Visit each profile and download portfolio images
       for (const profileUrl of profileUrls) {
         console.log(`Visiting profile: ${profileUrl}`);
-        // await page.goto("https://www.freelancer.com/u/Dixelar", { waitUntil: 'domcontentloaded' });
 
         try {
-          await page.goto(profileUrl, { waitUntil: 'domcontentloaded' });
+          await profilePage.goto(profileUrl, { waitUntil: 'domcontentloaded' });
           const namePart = profileUrl.split('/');
           const userName = namePart[namePart.length - 1];
           // Extract image URLs
-          const countryName = await page.$eval('div.UserSummaryInformation .SupplementaryInfo .NativeElement.ng-star-inserted',
+          const countryName = await profilePage.$eval('div.UserSummaryInformation .SupplementaryInfo .NativeElement.ng-star-inserted',
             (element) => element.textContent.split('(')[0].trim());
 
-          const imageUrls = await page.$$eval('.PortfolioItemCard-file-container.ng-star-inserted img', imgs =>
+          const imageUrls = await profilePage.$$eval('.PortfolioItemCard-file-container.ng-star-inserted img', imgs =>
             imgs
               .map(img => img.src).filter((item) => item.includes("jpg"))
           );
@@ -60,19 +74,26 @@ async function downloadImage(url, savePath) {
           // Step 3: Download each image
           for (const [index, imageUrl] of imageUrls.entries()) {
             const fileName = `${userName}-${countryName}-${index + 1}.jpg`;
-            const savePath = path.join(__dirname, 'downloads', fileName);
+            const savePath = path.join(__dirname, `downloads/${countryName}`, fileName);
 
+            if (downloadedImages.has(imageUrl)) {
+              console.log(`Skipping: ${imageUrl} (already downloaded)`);
+              continue;
+            }
             // Ensure the download directory exists
             fs.mkdirSync(path.dirname(savePath), { recursive: true });
 
             console.log(`Downloading image: ${imageUrl}`);
             await downloadImage(imageUrl, savePath);
+            downloadedImages.add(imageUrl);
+            fs.writeFileSync(PROGRESS_FILE, JSON.stringify(Array.from(downloadedImages), null, 2));
           }
         } catch (error) {
           console.log('error reason: ', error);
           continue;
         }
       }
+      await profilePage.close();
     }
 
   }
